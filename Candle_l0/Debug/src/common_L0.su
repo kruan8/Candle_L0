@@ -1,0 +1,6 @@
+common_L0.c:10:6:GPIO_ClockEnable	24	static
+common_L0.c:16:6:GPIO_ClockDisable	24	static
+common_L0.c:22:15:GPIO_GetPort	24	static
+common_L0.c:29:10:GPIO_GetPin	16	static
+common_L0.c:34:6:GPIO_SetAFpin	24	static
+common_L0.c:49:10:GPIO_GetPinSource	24	static
