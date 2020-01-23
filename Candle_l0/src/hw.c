@@ -15,22 +15,29 @@
 #include "stm32l0xx_ll_adc.h"
 #include "stm32l0xx_ll_tim.h"
 #include "stm32l0xx_ll_rcc.h"
+#include "stm32l0xx_ll_pwr.h"
 
 #define LED                 PA1
 
 #define LED_ON              (GET_PORT(LED)->BRR = GET_PIN(LED))
 #define LED_OFF             (GET_PORT(LED)->BSRR = GET_PIN(LED))
 
-#define BATT_IN             PA4
+#define HW_ADC_SAMPLES      10
+#define HW_BATT_CH          LL_ADC_CHANNEL_4
 #define BATT_CTRL           PA7
 
 #define BATT_CTRL_EN        (GET_PORT(BATT_CTRL)->BRR = GET_PIN(BATT_CTRL))
 #define BATT_CTRL_DIS       (GET_PORT(BATT_CTRL)->BSRR = GET_PIN(BATT_CTRL))
 
-#define TIM_PWM              TIM2  // (PA1 = TIM2/CH2)
-#define PWM_STEPS            16       // pocet kroku PWM
+#define HW_OPTO_CH          LL_ADC_CHANNEL_0
 
-PtrTimIntCb           g_pTimCb = 0;         // callback from TIM_PWM interrupt
+#define TIM_PWM             TIM2  // (PA1 = TIM2/CH2)
+#define PWM_STEPS           16       // pocet kroku PWM
+
+uint32_t                    g_nActualAdcChannel;          // converted channel
+PtrTimIntCb                 g_pTimCb = 0;                 // callback from TIM_PWM interrupt
+uint32_t                    g_nBatVoltage_mV = 4000;      // battery voltage (mV)
+uint32_t                    g_nOptoVoltage_mV = 3300;     // opto transistor voltage (mV)
 
 void _AD_Init(void);
 void _Gpio_Init(void);
@@ -39,13 +46,18 @@ void _PwmInit(void);
 
 void HW_Init(void)
 {
-  Timer_Init();
+  // Change MSI frequency to 1 MHz
+  LL_RCC_MSI_SetRange(LL_RCC_MSIRANGE_4);   // 1 MHz
+
+  // set voltage range 3
+  while (LL_PWR_IsActiveFlag_VOS());
+  LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE3);
+  while (LL_PWR_IsActiveFlag_VOS());
+
+//  Timer_Init();
   _Gpio_Init();
   _AD_Init();
-}
-
-void HW_LedOnOff(bool bEnable)
-{
+  _PwmInit();
 }
 
 void _AD_Init(void)
@@ -60,11 +72,15 @@ void _AD_Init(void)
    // ADC clock PCLK/2 (Synchronous clock mode) (ADC clock = 1MHz)
    LL_ADC_SetClock(ADC1, LL_ADC_CLOCK_SYNC_PCLK_DIV2);
 
- #ifdef OVERSAMPLING
+   LL_ADC_SetCommonFrequencyMode(ADC1_COMMON, LL_ADC_CLOCK_FREQ_MODE_LOW);
+
+   LL_ADC_REG_SetSequencerChannels(ADC1, HW_BATT_CH);
+
+
    // set oversampling, ! bity CKMODE registru CFGR2 musi byt nastaveny pred jakymkoliv nastaveni ADC - viz datasheet !
    LL_ADC_ConfigOverSamplingRatioShift(ADC1, LL_ADC_OVS_RATIO_16, LL_ADC_OVS_SHIFT_RIGHT_4);
    LL_ADC_SetOverSamplingScope(ADC1, LL_ADC_OVS_GRP_REGULAR_CONTINUED);
- #endif
+
 
    LL_ADC_SetSamplingTimeCommonChannels(ADC1, LL_ADC_SAMPLINGTIME_160CYCLES_5);
 
@@ -93,22 +109,31 @@ void _AD_Init(void)
 //
 
    LL_ADC_SetCommonPathInternalCh(ADC1_COMMON, LL_ADC_PATH_INTERNAL_VREFINT);
+
+   NVIC_SetPriority(ADC1_COMP_IRQn, 2);
+   NVIC_EnableIRQ(ADC1_COMP_IRQn);
+
+   LL_ADC_EnableIT_EOC(ADC1);
+
    LL_ADC_Enable(ADC1);
+}
+
+void HW_AdcMeasure(uint32_t nChannel)
+{
+  g_nActualAdcChannel = nChannel;
+  LL_ADC_REG_SetSequencerChannels(ADC1, nChannel);
+
+  LL_ADC_REG_StartConversion(ADC1);
 }
 
 void _Gpio_Init(void)
 {
   LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOA);
 
-#ifdef HW
   LL_GPIO_SetPinMode(GET_PORT(LED), GET_PIN(LED), LL_GPIO_MODE_ALTERNATE);
   LL_GPIO_SetPinOutputType(GET_PORT(LED), GET_PIN(LED), LL_GPIO_OUTPUT_PUSHPULL);
   LL_GPIO_SetPinPull(GET_PORT(LED), GET_PIN(LED), LL_GPIO_PULL_NO);
-  GPIO_SetAFpin(LED, LL_GPIO_AF_6);
-#else
-  LL_GPIO_SetPinMode(GET_PORT(LED), GET_PIN(LED), LL_GPIO_MODE_OUTPUT);
-  LL_GPIO_SetPinOutputType(GET_PORT(LED), GET_PIN(LED), LL_GPIO_OUTPUT_PUSHPULL);
-#endif
+  GPIO_SetAFpin(LED, LL_GPIO_AF_2);
 }
 
 uint32_t HW_GetTrueRandomNumber(void)
@@ -152,27 +177,18 @@ void _PwmInit(void)
   LL_RCC_ClocksTypeDef  RCC_Clocks;
   LL_RCC_GetSystemClocksFreq(&RCC_Clocks);
 
-  // nastavit 6kHz
-  TIM_PWM->PSC = RCC_Clocks.PCLK1_Frequency / 5000;  // cca 6 kHz
-  TIM_PWM->ARR = PWM_STEPS;
+  LL_TIM_SetPrescaler(TIM_PWM, RCC_Clocks.PCLK1_Frequency / 5000);  // cca 25 Hz
+  LL_TIM_SetAutoReload(TIM_PWM, PWM_STEPS);
 
-  /* (3) Set CCRx = 4, , the signal will be high during 4 us */
-  /* (4) Select PWM mode 1 on OC1 (OC1M = 110),
-  enable preload register on OC1 (OC1PE = 1) */
-  /* (5) Select active high polarity on OC1 (CC1P = 0, reset value),
-  enable the output on OC1 (CC1E = 1)*/
-  /* (6) Enable output (MOE = 1)*/
-  /* (7) Enable counter (CEN = 1)
-  select edge aligned mode (CMS = 00, reset value)
-  select direction as upcounter (DIR = 0, reset value) */
-  /* (8) Force update generation (UG = 1) */
-  TIM_PWM->CCR2 = 0; /* (3)  PWM value */
-  TIM_PWM->CCMR1 |= TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2PE; /* (4) */ // PWM mode1 + Preload register on TIMx_CCR4 enabled.
-  TIM_PWM->CCER |= TIM_CCER_CC2E; /* (5) */
-  TIM_PWM->CR1 |= TIM_CR1_CEN;
-  TIM_PWM->EGR |= TIM_EGR_UG; /* (8) */
+  LL_TIM_OC_SetMode(TIM_PWM, LL_TIM_CHANNEL_CH2, LL_TIM_OCMODE_PWM1);
+  LL_TIM_OC_EnablePreload(TIM_PWM, LL_TIM_CHANNEL_CH2);
+  LL_TIM_OC_SetPolarity(TIM_PWM, LL_TIM_CHANNEL_CH2, LL_TIM_OCPOLARITY_LOW);
+  LL_TIM_CC_EnableChannel(TIM_PWM, LL_TIM_CHANNEL_CH2);
 
-  TIM_PWM->DIER |= TIM_DIER_UIE;
+  LL_TIM_EnableCounter(TIM_PWM);
+  LL_TIM_GenerateEvent_UPDATE(TIM_PWM);
+
+  LL_TIM_EnableIT_UPDATE(TIM_PWM);
 
   // povolit preruseni od TIM3
   NVIC_SetPriority(TIM2_IRQn, 1);    // Set priority
@@ -185,7 +201,17 @@ void _PwmInit(void)
 
 void HW_PwmSet(uint16_t nValue)
 {
-  TIM_PWM->CCR4 = nValue;
+  LL_TIM_OC_SetCompareCH2(TIM_PWM, nValue);
+}
+
+void HW_LedOnOff(bool bEnable)
+{
+  bEnable ? LED_ON : LED_OFF;
+}
+
+void HW_BatVoltageCtrl(bool bEnable)
+{
+  bEnable ? BATT_CTRL_EN : BATT_CTRL_DIS;
 }
 
 void HW_SetTimCallback(PtrTimIntCb pTimCb)
@@ -193,7 +219,24 @@ void HW_SetTimCallback(PtrTimIntCb pTimCb)
   g_pTimCb = pTimCb;
 }
 
-void TIM3_IRQHandler(void)
+uint32_t HW_GetBatVoltage(void)
+{
+  return g_nBatVoltage_mV;
+}
+
+void ADC1_COMP_IRQHandler(void)
+{
+  if (g_nActualAdcChannel == HW_BATT_CH)
+  {
+    g_nBatVoltage_mV = LL_ADC_REG_ReadConversionData12(ADC1);
+  }
+  else if (g_nActualAdcChannel == HW_OPTO_CH)
+  {
+    g_nOptoVoltage_mV = LL_ADC_REG_ReadConversionData12(ADC1);
+  }
+}
+
+void TIM2_IRQHandler(void)
 {
   if (!(TIM_PWM->SR & TIM_SR_UIF))
   {

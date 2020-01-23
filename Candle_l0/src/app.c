@@ -16,6 +16,10 @@
 #define APP_SYSTICK_ISR_OFF     SysTick->CTRL  &= ~SysTick_CTRL_TICKINT_Msk  // vypnout preruseni od Systick
 #define APP_SYSTICK_ISR_ON      SysTick->CTRL  |= SysTick_CTRL_TICKINT_Msk   // zapnout preruseni od Systick
 
+#define APP_MEASURE_OPTO        6000
+#define APP_MEASURE_BAT         60000
+
+
 uint8_t g_nFrameCtrl = 0;   // 5 bit-Counter
 
 uint8_t g_nPwmValue = 0;    // 4 bit-Register
@@ -23,8 +27,10 @@ uint8_t g_nNextBright = 0;  // 4 bit-Register
 uint8_t g_nRand = 0;        // 5 bit Signal
 uint8_t g_nRandFlag = 0;    // 1 bit Signal
 
+uint32_t       g_nModeCounter;
 
 void _FrameControl(void);
+void _Sleep(void);
 
 uint32_t _GetTrueRandomNumber(void);
 
@@ -37,47 +43,48 @@ void App_Init(void)
   HW_Init();
   HW_SetTimCallback(App_TimCallback);
 
-#ifdef HW
-  App_PwmInit(nHCLKFrequency);
-#endif
 }
 
 void App_Exec(void)
 {
 
-#ifdef HW
   // SLEPP mod, nez dobehne PWM cyklus
   while (1)
   {
-    SleepMode();
+    _Sleep();
+//    g_nModeCounter++;
+//    if ((g_nModeCounter & 0xFFFF0000) == 0)
+//    {
+//
+//    }
+
   }
-#endif
 
-  uint8_t nPwmCtrl = 0;   // 4 bit-Counter
-
-  while(1)
-  {
-    TimerUs_delay(150);
-//     StopMode();
-
-    // PWM led
-    nPwmCtrl++;
-    nPwmCtrl &= 0xf;    // only 4 bit
-    if (nPwmCtrl <= g_nPwmValue)
-    {
-      HW_LedOnOff(true);
-    }
-    else
-    {
-      HW_LedOnOff(false);
-    }
-
-    // FRAME
-    if (nPwmCtrl == 0)
-    {
-      _FrameControl();
-    }
-  }
+//  uint8_t nPwmCtrl = 0;   // 4 bit-Counter
+//
+//  while(1)
+//  {
+//    TimerUs_delay(150);
+////     StopMode();
+//
+//    // PWM led
+//    nPwmCtrl++;
+//    nPwmCtrl &= 0xf;    // only 4 bit
+//    if (nPwmCtrl <= g_nPwmValue)
+//    {
+//      HW_LedOnOff(true);
+//    }
+//    else
+//    {
+//      HW_LedOnOff(false);
+//    }
+//
+//    // FRAME
+//    if (nPwmCtrl == 0)
+//    {
+//      _FrameControl();
+//    }
+//  }
 
 }
 
@@ -116,7 +123,7 @@ void _FrameControl(void)
   }
 }
 
-void SleepMode(void)
+void _Sleep(void)
 {
   APP_SYSTICK_ISR_OFF;
   __WFI();

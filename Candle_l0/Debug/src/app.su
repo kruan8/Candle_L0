@@ -1,6 +1,6 @@
-app.c:31:6:App_Init	8	static
-app.c:45:6:App_Exec	16	static
-app.c:84:6:_FrameControl	8	static
-app.c:119:6:SleepMode	8	static
-app.c:126:6:StopMode	8	static
-app.c:144:6:App_TimCallback	8	static
+app.c:37:6:App_Init	8	static
+app.c:48:6:App_Exec	8	static
+app.c:91:6:_FrameControl	8	static
+app.c:126:6:_Sleep	8	static
+app.c:133:6:StopMode	8	static
+app.c:151:6:App_TimCallback	8	static

@@ -13,7 +13,7 @@
 
 void App_Init(void);
 void App_Exec(void);
-void App_PwmInit(uint32_t nBusClock_Hz);
+
 void App_PwmSet(uint16_t nValue);
 void App_TimCallback(void);
 
