@@ -24,7 +24,7 @@
 #define APP_MEASURE_MS             10000
 
 #define APP_BATT_MIN_MV             3200
-#define APP_OPTO_MIN_MV             1000
+#define APP_OPTO_MIN_MV             2000
 
 #include "data.inc"
 
@@ -93,7 +93,7 @@ void App_Exec(void)
         LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
       }
 
-      if (HW_GetOptoVoltage() < APP_OPTO_MIN_MV)
+      if (HW_GetOptoVoltage() > APP_OPTO_MIN_MV)
       {
         // standby/stop
         while(1);

@@ -23,9 +23,9 @@
 #define LED_ON              (GET_PORT(LED)->BRR = GET_PIN(LED))
 #define LED_OFF             (GET_PORT(LED)->BSRR = GET_PIN(LED))
 
-#define HW_ADC_VOLTAGE_MV          3000
-#define HW_ADC_RESISTOR_DIVIDER_OPTO    1000/327
-#define HW_ADC_RESISTOR_DIVIDER_BATT    1000/327
+#define HW_ADC_VOLTAGE_MV                   3000
+#define HW_ADC_RESISTOR_DIVIDER_OPTO    1000/1000
+#define HW_ADC_RESISTOR_DIVIDER_BATT    1000/343
 
 #define HW_ADC_SAMPLES      10
 #define HW_BATT_CH          LL_ADC_CHANNEL_4
@@ -157,10 +157,16 @@ void _Gpio_Init(void)
 {
   LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOA);
 
+  // led
   LL_GPIO_SetPinMode(GET_PORT(LED), GET_PIN(LED), LL_GPIO_MODE_ALTERNATE);
   LL_GPIO_SetPinOutputType(GET_PORT(LED), GET_PIN(LED), LL_GPIO_OUTPUT_PUSHPULL);
   LL_GPIO_SetPinPull(GET_PORT(LED), GET_PIN(LED), LL_GPIO_PULL_NO);
   GPIO_SetAFpin(LED, LL_GPIO_AF_2);
+
+  // batt ctrl
+  LL_GPIO_SetPinMode(GET_PORT(BATT_CTRL), GET_PIN(BATT_CTRL), LL_GPIO_MODE_OUTPUT);
+  LL_GPIO_SetPinOutputType(GET_PORT(BATT_CTRL), GET_PIN(BATT_CTRL), LL_GPIO_OUTPUT_PUSHPULL);
+  LL_GPIO_SetPinPull(GET_PORT(BATT_CTRL), GET_PIN(BATT_CTRL), LL_GPIO_PULL_NO);
 }
 
 uint32_t HW_GetTrueRandomNumber(void)
@@ -260,11 +266,11 @@ void _CalculateAdcVoltage(void)
 {
   // calculate opto voltage
   g_nOptoVoltage_mV = (uint32_t)g_nAdcValues[hw_adc_opto] * HW_ADC_VOLTAGE_MV / 256;
-  g_nOptoVoltage_mV *= HW_ADC_RESISTOR_DIVIDER_OPTO;
+  g_nOptoVoltage_mV = g_nOptoVoltage_mV * HW_ADC_RESISTOR_DIVIDER_OPTO;
 
   // calculate batt voltage
   g_nBatVoltage_mV = (uint32_t)g_nAdcValues[hw_adc_batt] * HW_ADC_VOLTAGE_MV / 256;
-  g_nBatVoltage_mV *= HW_ADC_RESISTOR_DIVIDER_BATT;
+  g_nBatVoltage_mV = g_nBatVoltage_mV * HW_ADC_RESISTOR_DIVIDER_BATT;
 }
 
 bool HW_IsAdcConverted(void)
