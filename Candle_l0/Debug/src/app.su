@@ -1,6 +1,8 @@
-app.c:37:6:App_Init	8	static
-app.c:48:6:App_Exec	8	static
-app.c:91:6:_FrameControl	8	static
-app.c:126:6:_Sleep	8	static
-app.c:133:6:StopMode	8	static
-app.c:151:6:App_TimCallback	8	static
+stm32l0xx_ll_iwdg.h:156:22:LL_IWDG_ReloadCounter	16	static
+stm32l0xx_ll_pwr.h:384:22:LL_PWR_SetPowerMode	16	static
+app.c:48:6:App_Init	8	static
+app.c:61:6:App_Exec	8	static
+app.c:109:6:_FrameControl	16	static
+app.c:137:6:_Sleep	8	static
+app.c:144:6:StopMode	8	static
+app.c:162:6:App_TimCallback	8	static

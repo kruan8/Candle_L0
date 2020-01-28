@@ -19,7 +19,7 @@
 							<option id="com.atollic.truestudio.toolchain_options.mcu.1082447129" name="Microcontroller" superClass="com.atollic.truestudio.toolchain_options.mcu" value="STM32L011D4" valueType="string"/>
 							<option id="com.atollic.truestudio.toolchain_options.vendor.1843479799" name="Vendor name" superClass="com.atollic.truestudio.toolchain_options.vendor" value="STMicroelectronics" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="com.atollic.truestudio.exe.debug.toolchain.platform.490651476" isAbstract="false" name="Debug platform" osList="all" superClass="com.atollic.truestudio.exe.debug.toolchain.platform"/>
-							<builder buildPath="${workspace_loc:/Candle_l0}/Debug" customBuilderProperties="toolChainpathType=1|toolChainpathString=C:\\Program Files (x86)\\Atollic\\TrueSTUDIO for STM32 9.0.1\\ARMTools\\bin|" id="com.atollic.truestudio.mbs.builder1.715262120" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CDT Internal Builder" superClass="com.atollic.truestudio.mbs.builder1"/>
+							<builder buildPath="${workspace_loc:/Candle_l0}/Debug" customBuilderProperties="toolChainpathType=1|toolChainpathString=C:\\Program Files (x86)\\Atollic\\TrueSTUDIO for STM32 9.0.1\\ARMTools\\bin|" id="com.atollic.truestudio.mbs.builder1.715262120" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CDT Internal Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="com.atollic.truestudio.mbs.builder1"/>
 							<tool id="com.atollic.truestudio.exe.debug.toolchain.as.1004250700" name="Assembler" superClass="com.atollic.truestudio.exe.debug.toolchain.as">
 								<option id="com.atollic.truestudio.common_options.target.endianess.773198622" name="Endianess" superClass="com.atollic.truestudio.common_options.target.endianess"/>
 								<option id="com.atollic.truestudio.common_options.target.mcpu.1877036190" name="Microcontroller" superClass="com.atollic.truestudio.common_options.target.mcpu" value="STM32L011D4" valueType="enumerated"/>
@@ -110,6 +110,7 @@
 							<option id="com.atollic.truestudio.general.runtimelib.1131395972.1587074561" name="Runtime Library" superClass="com.atollic.truestudio.general.runtimelib.1131395972"/>
 							<option id="com.atollic.truestudio.toolchain_options.mcu.1082447129.514569080" name="Microcontroller" superClass="com.atollic.truestudio.toolchain_options.mcu.1082447129"/>
 							<option id="com.atollic.truestudio.toolchain_options.vendor.1843479799.1371720385" name="Vendor name" superClass="com.atollic.truestudio.toolchain_options.vendor.1843479799"/>
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="com.atollic.truestudio.exe.debug.toolchain.platform" isAbstract="false" name="Debug platform" osList="all" superClass="com.atollic.truestudio.exe.debug.toolchain.platform"/>
 							<tool id="com.atollic.truestudio.exe.debug.toolchain.as.654518951" name="Assembler" superClass="com.atollic.truestudio.exe.debug.toolchain.as.1004250700">
 								<inputType id="com.atollic.truestudio.as.input.1284941818" name="Input" superClass="com.atollic.truestudio.as.input"/>
 							</tool>
@@ -138,7 +139,11 @@
 		<project id="Candle_l0.com.atollic.truestudio.exe.531245485" name="Executable" projectType="com.atollic.truestudio.exe"/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
-	<storageModule moduleId="refreshScope"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Debug">
+			<resource resourceType="PROJECT" workspacePath="/Candle_l0"/>
+		</configuration>
+	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>

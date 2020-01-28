@@ -16,11 +16,16 @@
 #include "stm32l0xx_ll_tim.h"
 #include "stm32l0xx_ll_rcc.h"
 #include "stm32l0xx_ll_pwr.h"
+#include "stm32l0xx_ll_iwdg.h"
 
 #define LED                 PA1
 
 #define LED_ON              (GET_PORT(LED)->BRR = GET_PIN(LED))
 #define LED_OFF             (GET_PORT(LED)->BSRR = GET_PIN(LED))
+
+#define HW_ADC_VOLTAGE_MV          3000
+#define HW_ADC_RESISTOR_DIVIDER_OPTO    1000/327
+#define HW_ADC_RESISTOR_DIVIDER_BATT    1000/327
 
 #define HW_ADC_SAMPLES      10
 #define HW_BATT_CH          LL_ADC_CHANNEL_4
@@ -34,15 +39,27 @@
 #define TIM_PWM             TIM2  // (PA1 = TIM2/CH2)
 #define PWM_STEPS           16       // pocet kroku PWM
 
-uint32_t                    g_nActualAdcChannel;          // converted channel
-PtrTimIntCb                 g_pTimCb = 0;                 // callback from TIM_PWM interrupt
-uint32_t                    g_nBatVoltage_mV = 4000;      // battery voltage (mV)
-uint32_t                    g_nOptoVoltage_mV = 3300;     // opto transistor voltage (mV)
+typedef enum
+{
+  hw_adc_opto = 0,
+  hw_adc_batt,
+//  hw_adc_ref,
+  hw_adc_sizeof,
+} hw_adc_channel_e;
+
+static uint32_t                    g_nActualAdcChannel;          // converted channel
+static uint8_t                     g_nAdcValues[hw_adc_sizeof];   //
+static bool                        g_bAdcConverted;
+
+static PtrTimIntCb                 g_pTimCb = 0;                 // callback from TIM_PWM interrupt
+static uint32_t                    g_nBatVoltage_mV = 4000;      // battery voltage (mV)
+static uint32_t                    g_nOptoVoltage_mV = 3300;     // opto transistor voltage (mV)
+
 
 void _AD_Init(void);
 void _Gpio_Init(void);
 void _PwmInit(void);
-
+void _CalculateAdcVoltage(void);
 
 void HW_Init(void)
 {
@@ -58,6 +75,19 @@ void HW_Init(void)
   _Gpio_Init();
   _AD_Init();
   _PwmInit();
+
+  LL_IWDG_EnableWriteAccess(IWDG);
+  LL_IWDG_SetPrescaler(IWDG, LL_IWDG_PRESCALER_256);
+  LL_IWDG_Enable(IWDG);
+  LL_IWDG_SetReloadCounter(IWDG, 0xFFF);  // cca 32s
+
+  while(!LL_IWDG_IsReady(IWDG))
+  {
+  /* add time out here for a robust application */
+  }
+
+  LL_IWDG_ReloadCounter(IWDG);
+
 }
 
 void _AD_Init(void)
@@ -73,14 +103,12 @@ void _AD_Init(void)
    LL_ADC_SetClock(ADC1, LL_ADC_CLOCK_SYNC_PCLK_DIV2);
 
    LL_ADC_SetCommonFrequencyMode(ADC1_COMMON, LL_ADC_CLOCK_FREQ_MODE_LOW);
-
-   LL_ADC_REG_SetSequencerChannels(ADC1, HW_BATT_CH);
-
+   LL_ADC_SetResolution(ADC1, LL_ADC_RESOLUTION_8B);
+   LL_ADC_SetLowPowerMode(ADC1, LL_ADC_LP_AUTOPOWEROFF);
 
    // set oversampling, ! bity CKMODE registru CFGR2 musi byt nastaveny pred jakymkoliv nastaveni ADC - viz datasheet !
    LL_ADC_ConfigOverSamplingRatioShift(ADC1, LL_ADC_OVS_RATIO_16, LL_ADC_OVS_SHIFT_RIGHT_4);
    LL_ADC_SetOverSamplingScope(ADC1, LL_ADC_OVS_GRP_REGULAR_CONTINUED);
-
 
    LL_ADC_SetSamplingTimeCommonChannels(ADC1, LL_ADC_SAMPLINGTIME_160CYCLES_5);
 
@@ -109,6 +137,7 @@ void _AD_Init(void)
 //
 
    LL_ADC_SetCommonPathInternalCh(ADC1_COMMON, LL_ADC_PATH_INTERNAL_VREFINT);
+   LL_ADC_REG_SetSequencerChannels(ADC1, HW_OPTO_CH | HW_BATT_CH);
 
    NVIC_SetPriority(ADC1_COMP_IRQn, 2);
    NVIC_EnableIRQ(ADC1_COMP_IRQn);
@@ -118,11 +147,9 @@ void _AD_Init(void)
    LL_ADC_Enable(ADC1);
 }
 
-void HW_AdcMeasure(uint32_t nChannel)
+void HW_StartAdc(void)
 {
-  g_nActualAdcChannel = nChannel;
-  LL_ADC_REG_SetSequencerChannels(ADC1, nChannel);
-
+  g_nActualAdcChannel = hw_adc_opto;
   LL_ADC_REG_StartConversion(ADC1);
 }
 
@@ -177,7 +204,7 @@ void _PwmInit(void)
   LL_RCC_ClocksTypeDef  RCC_Clocks;
   LL_RCC_GetSystemClocksFreq(&RCC_Clocks);
 
-  LL_TIM_SetPrescaler(TIM_PWM, RCC_Clocks.PCLK1_Frequency / 5000);  // cca 25 Hz
+  LL_TIM_SetPrescaler(TIM_PWM, RCC_Clocks.PCLK1_Frequency / 6600);  // frekvence PWM 6600 Hz
   LL_TIM_SetAutoReload(TIM_PWM, PWM_STEPS);
 
   LL_TIM_OC_SetMode(TIM_PWM, LL_TIM_CHANNEL_CH2, LL_TIM_OCMODE_PWM1);
@@ -224,15 +251,41 @@ uint32_t HW_GetBatVoltage(void)
   return g_nBatVoltage_mV;
 }
 
+uint32_t HW_GetOptoVoltage(void)
+{
+  return g_nOptoVoltage_mV;
+}
+
+void _CalculateAdcVoltage(void)
+{
+  // calculate opto voltage
+  g_nOptoVoltage_mV = (uint32_t)g_nAdcValues[hw_adc_opto] * HW_ADC_VOLTAGE_MV / 256;
+  g_nOptoVoltage_mV *= HW_ADC_RESISTOR_DIVIDER_OPTO;
+
+  // calculate batt voltage
+  g_nBatVoltage_mV = (uint32_t)g_nAdcValues[hw_adc_batt] * HW_ADC_VOLTAGE_MV / 256;
+  g_nBatVoltage_mV *= HW_ADC_RESISTOR_DIVIDER_BATT;
+}
+
+bool HW_IsAdcConverted(void)
+{
+  return g_bAdcConverted;
+}
+
+void HW_ResetAdcConverted(void)
+{
+  g_bAdcConverted = false;
+}
+
 void ADC1_COMP_IRQHandler(void)
 {
-  if (g_nActualAdcChannel == HW_BATT_CH)
+  g_nAdcValues[g_nActualAdcChannel] = LL_ADC_REG_ReadConversionData8(ADC1);
+  g_nActualAdcChannel++;
+  if (g_nActualAdcChannel == hw_adc_sizeof)
   {
-    g_nBatVoltage_mV = LL_ADC_REG_ReadConversionData12(ADC1);
-  }
-  else if (g_nActualAdcChannel == HW_OPTO_CH)
-  {
-    g_nOptoVoltage_mV = LL_ADC_REG_ReadConversionData12(ADC1);
+    g_bAdcConverted = true;
+    HW_BatVoltageCtrl(false);
+    _CalculateAdcVoltage();
   }
 }
 

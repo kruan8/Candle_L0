@@ -12,22 +12,33 @@
 
 #include "stm32l0xx_ll_bus.h"
 #include "stm32l0xx_ll_system.h"
+#include "stm32l0xx_ll_iwdg.h"
+#include "stm32l0xx_ll_pwr.h"
+#include "stm32l0xx_ll_rcc.h"
 
 #define APP_SYSTICK_ISR_OFF     SysTick->CTRL  &= ~SysTick_CTRL_TICKINT_Msk  // vypnout preruseni od Systick
 #define APP_SYSTICK_ISR_ON      SysTick->CTRL  |= SysTick_CTRL_TICKINT_Msk   // zapnout preruseni od Systick
 
-#define APP_MEASURE_OPTO        6000
-#define APP_MEASURE_BAT         60000
 
+#define APP_MEASURE_BAT_CTRL_MS     9900
+#define APP_MEASURE_MS             10000
 
-uint8_t g_nFrameCtrl = 0;   // 5 bit-Counter
+#define APP_BATT_MIN_MV             3200
+#define APP_OPTO_MIN_MV             1000
 
-uint8_t g_nPwmValue = 0;    // 4 bit-Register
-uint8_t g_nNextBright = 0;  // 4 bit-Register
-uint8_t g_nRand = 0;        // 5 bit Signal
-uint8_t g_nRandFlag = 0;    // 1 bit Signal
+#include "data.inc"
 
-uint32_t       g_nModeCounter;
+static uint8_t        g_nFrameCtrl = 0;   // 5 bit-Counter
+
+//static uint8_t        g_nPwmValue = 0;    // 4 bit-Register
+//static uint8_t        g_nNextBright = 0;  // 4 bit-Register
+//static uint8_t        g_nRand = 0;        // 5 bit Signal
+//static uint8_t        g_nRandFlag = 0;    // 1 bit Signal
+
+static uint32_t       g_nModeCounter;
+
+static uint16_t       g_nDataCounter;
+
 
 void _FrameControl(void);
 void _Sleep(void);
@@ -43,49 +54,56 @@ void App_Init(void)
   HW_Init();
   HW_SetTimCallback(App_TimCallback);
 
+  g_nDataCounter = 0;
+  g_nModeCounter = APP_MEASURE_BAT_CTRL_MS - 1;
 }
 
 void App_Exec(void)
 {
 
+  // WWDG reset?
+//  if (LL_RCC_IsActiveFlag_WWDGRST())
+//  {
+//
+//  }
+
   // SLEPP mod, nez dobehne PWM cyklus
   while (1)
   {
     _Sleep();
-//    g_nModeCounter++;
-//    if ((g_nModeCounter & 0xFFFF0000) == 0)
-//    {
-//
-//    }
+    g_nModeCounter++;
+    if (g_nModeCounter == APP_MEASURE_BAT_CTRL_MS)
+    {
+      HW_BatVoltageCtrl(true);
+    }
+    else if (g_nModeCounter == APP_MEASURE_MS)
+    {
+      g_nModeCounter = 0;
+      HW_StartAdc();
+    }
+
+    LL_IWDG_ReloadCounter(IWDG);
+
+    if (HW_IsAdcConverted())
+    {
+      if (HW_GetBatVoltage() < APP_BATT_MIN_MV)
+      {
+        // standby/stop
+        while(1);
+        LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
+      }
+
+      if (HW_GetOptoVoltage() < APP_OPTO_MIN_MV)
+      {
+        // standby/stop
+        while(1);
+        LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
+      }
+
+      HW_ResetAdcConverted();
+    }
 
   }
-
-//  uint8_t nPwmCtrl = 0;   // 4 bit-Counter
-//
-//  while(1)
-//  {
-//    TimerUs_delay(150);
-////     StopMode();
-//
-//    // PWM led
-//    nPwmCtrl++;
-//    nPwmCtrl &= 0xf;    // only 4 bit
-//    if (nPwmCtrl <= g_nPwmValue)
-//    {
-//      HW_LedOnOff(true);
-//    }
-//    else
-//    {
-//      HW_LedOnOff(false);
-//    }
-//
-//    // FRAME
-//    if (nPwmCtrl == 0)
-//    {
-//      _FrameControl();
-//    }
-//  }
-
 }
 
 void _FrameControl(void)
@@ -93,33 +111,26 @@ void _FrameControl(void)
   g_nFrameCtrl++;
   g_nFrameCtrl &= 0x1f;
 
-  // generate a new random number every 8 cycles. In reality this is most likely bit serial
-  if ((g_nFrameCtrl & 0x07) == 0)
-  {
-    g_nRand = HW_GetTrueRandomNumber() & 0x1f;
-    if ((g_nRand & 0x0c) != 0)
-    {
-      g_nRandFlag = 1;
-    }
-    else
-    {
-      g_nRandFlag = 0; // only update if valid
-    }
-  }
-
   // NEW FRAME
   if (g_nFrameCtrl == 0)
   {
-    // reload PWM
-    g_nPwmValue = g_nNextBright;
+    uint8_t nValue;
+    if (g_nDataCounter & 0x01)
+    {
+      nValue = g_arrData[g_nDataCounter >> 1] & 0x0F;
+    }
+    else
+    {
+      nValue = g_arrData[g_nDataCounter >> 1] >> 4;
+    }
 
-    // force update at beginning of frame
-    g_nRandFlag = 1;
-  }
+    g_nDataCounter++;
+    if (g_nDataCounter == sizeof (g_arrData) * 2)
+    {
+      g_nDataCounter = 0;
+    }
 
-  if (g_nRandFlag)
-  {
-    g_nNextBright = g_nRand > 15 ? 15 : g_nRand;
+    HW_PwmSet(nValue);
   }
 }
 
@@ -143,7 +154,7 @@ void StopMode(void)
 
   APP_SYSTICK_ISR_OFF;
 
-//  PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
+  LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
 
   APP_SYSTICK_ISR_ON;
 }
@@ -151,6 +162,4 @@ void StopMode(void)
 void App_TimCallback(void)
 {
   _FrameControl();
-
-  HW_PwmSet(g_nPwmValue);
 }

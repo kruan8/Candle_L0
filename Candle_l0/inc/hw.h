@@ -20,4 +20,11 @@ void HW_LedOnOff(bool bEnable);
 void HW_BatVoltageCtrl(bool bEnable);
 void HW_SetTimCallback(PtrTimIntCb pTimCb);
 
+uint32_t HW_GetBatVoltage(void);
+uint32_t HW_GetOptoVoltage(void);
+
+void HW_StartAdc(void);
+bool HW_IsAdcConverted(void);
+void HW_ResetAdcConverted(void);
+
 #endif /* HW_H_ */
