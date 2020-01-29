@@ -15,11 +15,14 @@ typedef void(*PtrTimIntCb) (void);
 
 void HW_Init(void);
 void HW_PwmSet(uint16_t nValue);
+void HW_PwmOff(void);
+
 uint32_t HW_GetTrueRandomNumber(void);
 void HW_LedOnOff(bool bEnable);
-void HW_BatVoltageCtrl(bool bEnable);
+void HW_PwmOn(void);
 void HW_SetTimCallback(PtrTimIntCb pTimCb);
 
+void HW_BatVoltageCtrl(bool bEnable);
 uint32_t HW_GetBatVoltage(void);
 uint32_t HW_GetOptoVoltage(void);
 

@@ -43,5 +43,8 @@ int main(void)
 
   App_Init();
 
-  App_Exec();
+  while(1)
+  {
+    App_Exec();
+  }
 }

@@ -19,25 +19,26 @@
 #define APP_SYSTICK_ISR_OFF     SysTick->CTRL  &= ~SysTick_CTRL_TICKINT_Msk  // vypnout preruseni od Systick
 #define APP_SYSTICK_ISR_ON      SysTick->CTRL  |= SysTick_CTRL_TICKINT_Msk   // zapnout preruseni od Systick
 
-
-#define APP_MEASURE_BAT_CTRL_MS     9900
-#define APP_MEASURE_MS             10000
+#define APP_CYCLE_DURATION_MS         160
+#define APP_MEASURE_BAT_CTRL_MS     (9900 / APP_CYCLE_DURATION_MS)
+#define APP_MEASURE_MS             (10000 / APP_CYCLE_DURATION_MS)
 
 #define APP_BATT_MIN_MV             3200
-#define APP_OPTO_MIN_MV             2000
+#define APP_OPTO_MIN_MV             1000
 
 #include "data.inc"
 
-static uint8_t        g_nFrameCtrl = 0;   // 5 bit-Counter
+//static uint8_t        g_nFrameCtrl = 0;   // 5 bit-Counter
 
 //static uint8_t        g_nPwmValue = 0;    // 4 bit-Register
 //static uint8_t        g_nNextBright = 0;  // 4 bit-Register
 //static uint8_t        g_nRand = 0;        // 5 bit Signal
 //static uint8_t        g_nRandFlag = 0;    // 1 bit Signal
 
-static uint32_t       g_nModeCounter;
+static uint32_t       g_nMeasureIntervalCounter;
 
-static uint16_t       g_nDataCounter;
+
+static bool           g_bInitialization;    // wait for first ADC conversion
 
 
 void _FrameControl(void);
@@ -54,91 +55,73 @@ void App_Init(void)
   HW_Init();
   HW_SetTimCallback(App_TimCallback);
 
-  g_nDataCounter = 0;
-  g_nModeCounter = APP_MEASURE_BAT_CTRL_MS - 1;
+  g_nMeasureIntervalCounter = APP_MEASURE_BAT_CTRL_MS - 1;
+  g_bInitialization = true;
 }
 
 void App_Exec(void)
 {
-
-  // WWDG reset?
-//  if (LL_RCC_IsActiveFlag_WWDGRST())
-//  {
-//
-//  }
-
   // SLEPP mod, nez dobehne PWM cyklus
-  while (1)
+  _Sleep();
+
+  g_nMeasureIntervalCounter++;
+  if (g_nMeasureIntervalCounter == APP_MEASURE_BAT_CTRL_MS)
   {
-    _Sleep();
-    g_nModeCounter++;
-    if (g_nModeCounter == APP_MEASURE_BAT_CTRL_MS)
-    {
-      HW_BatVoltageCtrl(true);
-    }
-    else if (g_nModeCounter == APP_MEASURE_MS)
-    {
-      g_nModeCounter = 0;
-      HW_StartAdc();
-    }
-
-    LL_IWDG_ReloadCounter(IWDG);
-
-    if (HW_IsAdcConverted())
-    {
-      if (HW_GetBatVoltage() < APP_BATT_MIN_MV)
-      {
-        // standby/stop
-        while(1);
-        LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
-      }
-
-      if (HW_GetOptoVoltage() > APP_OPTO_MIN_MV)
-      {
-        // standby/stop
-        while(1);
-        LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
-      }
-
-      HW_ResetAdcConverted();
-    }
-
+    HW_BatVoltageCtrl(true);
   }
+  else if (g_nMeasureIntervalCounter == APP_MEASURE_MS)
+  {
+    g_nMeasureIntervalCounter = 0;
+    HW_StartAdc();
+  }
+
+  if (HW_IsAdcConverted())
+  {
+//    if (HW_GetBatVoltage() < APP_BATT_MIN_MV || HW_GetOptoVoltage() > APP_OPTO_MIN_MV)
+//    {
+//      HW_PwmOff();
+//      // standby/stop
+//      while(1);
+//      LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
+//    }
+
+    HW_ResetAdcConverted();
+    if (g_bInitialization)
+    {
+      g_bInitialization = false;
+      HW_PwmOn();
+    }
+  }
+
+  LL_IWDG_ReloadCounter(IWDG);
 }
 
 void _FrameControl(void)
 {
-  g_nFrameCtrl++;
-  g_nFrameCtrl &= 0x1f;
+  static uint16_t nDataIndex = 0;        // index to data array
+  static uint32_t nNibble = 0;
 
-  // NEW FRAME
-  if (g_nFrameCtrl == 0)
+  uint8_t nValue;
+  if (nNibble & 0x01)
   {
-    uint8_t nValue;
-    if (g_nDataCounter & 0x01)
-    {
-      nValue = g_arrData[g_nDataCounter >> 1] & 0x0F;
-    }
-    else
-    {
-      nValue = g_arrData[g_nDataCounter >> 1] >> 4;
-    }
-
-    g_nDataCounter++;
-    if (g_nDataCounter == sizeof (g_arrData) * 2)
-    {
-      g_nDataCounter = 0;
-    }
-
-    HW_PwmSet(nValue);
+    nValue = g_arrData[nDataIndex] & 0x0F;
+    nDataIndex++;
+    nDataIndex %= sizeof (g_arrData);
   }
+  else
+  {
+    nValue = g_arrData[nDataIndex] >> 4;
+  }
+
+  nNibble++;
+  HW_PwmSet(nValue);
 }
 
 void _Sleep(void)
 {
-  APP_SYSTICK_ISR_OFF;
+//  APP_SYSTICK_ISR_OFF;
   __WFI();
-  APP_SYSTICK_ISR_ON;
+//  APP_SYSTICK_ISR_ON;
 }
 
 void StopMode(void)

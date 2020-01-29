@@ -71,7 +71,7 @@ void HW_Init(void)
   LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE3);
   while (LL_PWR_IsActiveFlag_VOS());
 
-//  Timer_Init();
+  Timer_Init();
   _Gpio_Init();
   _AD_Init();
   _PwmInit();
@@ -169,39 +169,39 @@ void _Gpio_Init(void)
   LL_GPIO_SetPinPull(GET_PORT(BATT_CTRL), GET_PIN(BATT_CTRL), LL_GPIO_PULL_NO);
 }
 
-uint32_t HW_GetTrueRandomNumber(void)
-{
-  //enable ADC1 clock
-  LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_ADC1);
-
-  // Enable ADCperipheral
-  LL_ADC_Enable(ADC1);
-  while (!LL_ADC_IsEnabled(ADC1));
-
-  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_CRC);
-
-  for (uint8_t i = 0; i < 8; i++)
-  {
-    //Start ADC1 Software Conversion
-    LL_ADC_REG_StartConversion(ADC1);
-
-    //wait for conversion complete
-    while (!LL_ADC_IsActiveFlag_EOC(ADC1));
-
-    CRC->DR = LL_ADC_REG_ReadConversionData12(ADC1);
-  }
-
-  LL_ADC_Disable(ADC1);
-
-  LL_APB2_GRP1_DisableClock(LL_APB2_GRP1_PERIPH_ADC1);
-
-  CRC->DR = 0xBADA55E5;
-  uint32_t nValue = CRC->DR;
-
-  LL_AHB1_GRP1_DisableClock(LL_AHB1_GRP1_PERIPH_CRC);
-
-  return nValue;
-}
+//uint32_t HW_GetTrueRandomNumber(void)
+//{
+//  //enable ADC1 clock
+//  LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_ADC1);
+//
+//  // Enable ADCperipheral
+//  LL_ADC_Enable(ADC1);
+//  while (!LL_ADC_IsEnabled(ADC1));
+//
+//  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_CRC);
+//
+//  for (uint8_t i = 0; i < 8; i++)
+//  {
+//    //Start ADC1 Software Conversion
+//    LL_ADC_REG_StartConversion(ADC1);
+//
+//    //wait for conversion complete
+//    while (!LL_ADC_IsActiveFlag_EOC(ADC1));
+//
+//    CRC->DR = LL_ADC_REG_ReadConversionData12(ADC1);
+//  }
+//
+//  LL_ADC_Disable(ADC1);
+//
+//  LL_APB2_GRP1_DisableClock(LL_APB2_GRP1_PERIPH_ADC1);
+//
+//  CRC->DR = 0xBADA55E5;
+//  uint32_t nValue = CRC->DR;
+//
+//  LL_AHB1_GRP1_DisableClock(LL_AHB1_GRP1_PERIPH_CRC);
+//
+//  return nValue;
+//}
 
 void _PwmInit(void)
 {
@@ -210,15 +210,13 @@ void _PwmInit(void)
   LL_RCC_ClocksTypeDef  RCC_Clocks;
   LL_RCC_GetSystemClocksFreq(&RCC_Clocks);
 
-  LL_TIM_SetPrescaler(TIM_PWM, RCC_Clocks.PCLK1_Frequency / 6600);  // frekvence PWM 6600 Hz
+  LL_TIM_SetPrescaler(TIM_PWM, RCC_Clocks.PCLK1_Frequency / 100);  // frekvence PWM
   LL_TIM_SetAutoReload(TIM_PWM, PWM_STEPS);
 
   LL_TIM_OC_SetMode(TIM_PWM, LL_TIM_CHANNEL_CH2, LL_TIM_OCMODE_PWM1);
   LL_TIM_OC_EnablePreload(TIM_PWM, LL_TIM_CHANNEL_CH2);
   LL_TIM_OC_SetPolarity(TIM_PWM, LL_TIM_CHANNEL_CH2, LL_TIM_OCPOLARITY_LOW);
-  LL_TIM_CC_EnableChannel(TIM_PWM, LL_TIM_CHANNEL_CH2);
 
-  LL_TIM_EnableCounter(TIM_PWM);
   LL_TIM_GenerateEvent_UPDATE(TIM_PWM);
 
   LL_TIM_EnableIT_UPDATE(TIM_PWM);
@@ -230,11 +228,24 @@ void _PwmInit(void)
 #ifdef DEBUG
   LL_DBGMCU_APB1_GRP1_FreezePeriph(LL_DBGMCU_APB1_GRP1_TIM2_STOP);
 #endif
+
+  LL_TIM_EnableCounter(TIM_PWM);
 }
 
 void HW_PwmSet(uint16_t nValue)
 {
   LL_TIM_OC_SetCompareCH2(TIM_PWM, nValue);
+}
+
+void HW_PwmOn(void)
+{
+  LL_TIM_CC_EnableChannel(TIM_PWM, LL_TIM_CHANNEL_CH2);
+}
+
+void HW_PwmOff(void)
+{
+  LL_TIM_CC_DisableChannel(TIM_PWM, LL_TIM_CHANNEL_CH2);
+  LL_TIM_DisableCounter(TIM_PWM);
 }
 
 void HW_LedOnOff(bool bEnable)

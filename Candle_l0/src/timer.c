@@ -19,6 +19,7 @@ PtrSysTickCallback pSysTickCallback = 0;
 
 void Timer_Init()
 {
+  SystemCoreClockUpdate();
   if (SysTick_Config(SystemCoreClock / 1000))
   {
     /* Capture error */
