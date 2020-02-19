@@ -211,11 +211,12 @@ void _PwmInit(void)
   LL_RCC_GetSystemClocksFreq(&RCC_Clocks);
 
   LL_TIM_SetPrescaler(TIM_PWM, RCC_Clocks.PCLK1_Frequency / 100);  // frekvence PWM
-  LL_TIM_SetAutoReload(TIM_PWM, PWM_STEPS);
+  LL_TIM_SetAutoReload(TIM_PWM, PWM_STEPS - 1);
 
   LL_TIM_OC_SetMode(TIM_PWM, LL_TIM_CHANNEL_CH2, LL_TIM_OCMODE_PWM1);
   LL_TIM_OC_EnablePreload(TIM_PWM, LL_TIM_CHANNEL_CH2);
   LL_TIM_OC_SetPolarity(TIM_PWM, LL_TIM_CHANNEL_CH2, LL_TIM_OCPOLARITY_LOW);
+  LL_TIM_CC_EnableChannel(TIM_PWM, LL_TIM_CHANNEL_CH2);
 
   LL_TIM_GenerateEvent_UPDATE(TIM_PWM);
 
@@ -228,6 +229,7 @@ void _PwmInit(void)
 #ifdef DEBUG
   LL_DBGMCU_APB1_GRP1_FreezePeriph(LL_DBGMCU_APB1_GRP1_TIM2_STOP);
 #endif
+
 
   LL_TIM_EnableCounter(TIM_PWM);
 }

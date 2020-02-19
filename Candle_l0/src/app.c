@@ -62,7 +62,7 @@ void App_Init(void)
 void App_Exec(void)
 {
   // SLEPP mod, nez dobehne PWM cyklus
-  _Sleep();
+//  _Sleep();
 
   g_nMeasureIntervalCounter++;
   if (g_nMeasureIntervalCounter == APP_MEASURE_BAT_CTRL_MS)
