@@ -39,6 +39,7 @@ static uint32_t       g_nMeasureIntervalCounter;
 
 
 static bool           g_bInitialization;    // wait for first ADC conversion
+static uint8_t        g_FrameCounter;
 
 
 void _FrameControl(void);
@@ -113,8 +114,8 @@ void _FrameControl(void)
     nValue = g_arrData[nDataIndex] >> 4;
   }
 
-  nNibble++;
   HW_PwmSet(nValue);
+  nNibble++;
 }
 
 void _Sleep(void)
@@ -144,5 +145,11 @@ void StopMode(void)
 
 void App_TimCallback(void)
 {
-  _FrameControl();
+  g_FrameCounter++;
+  g_FrameCounter %= 0xF;
+  if (g_FrameCounter == 0)
+  {
+    _FrameControl();
+  }
+
 }

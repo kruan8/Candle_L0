@@ -210,8 +210,8 @@ void _PwmInit(void)
   LL_RCC_ClocksTypeDef  RCC_Clocks;
   LL_RCC_GetSystemClocksFreq(&RCC_Clocks);
 
-  LL_TIM_SetPrescaler(TIM_PWM, RCC_Clocks.PCLK1_Frequency / 100);  // frekvence PWM
-  LL_TIM_SetAutoReload(TIM_PWM, PWM_STEPS - 1);
+  LL_TIM_SetPrescaler(TIM_PWM, RCC_Clocks.PCLK1_Frequency / (100 * PWM_STEPS));  // frekvence PWM
+  LL_TIM_SetAutoReload(TIM_PWM, PWM_STEPS - 2);
 
   LL_TIM_OC_SetMode(TIM_PWM, LL_TIM_CHANNEL_CH2, LL_TIM_OCMODE_PWM1);
   LL_TIM_OC_EnablePreload(TIM_PWM, LL_TIM_CHANNEL_CH2);
