@@ -20,31 +20,24 @@
 #define APP_SYSTICK_ISR_ON      SysTick->CTRL  |= SysTick_CTRL_TICKINT_Msk   // zapnout preruseni od Systick
 
 #define APP_CYCLE_DURATION_MS         160
-#define APP_MEASURE_BAT_CTRL_MS     (9900 / APP_CYCLE_DURATION_MS)
-#define APP_MEASURE_MS             (10000 / APP_CYCLE_DURATION_MS)
+#define APP_MEASURE_BAT_CTRL_MS     10000
+#define APP_MEASURE_OFFSET_MS         100
 
 #define APP_BATT_MIN_MV             3200
 #define APP_OPTO_MIN_MV             1000
 
 #include "data.inc"
 
-//static uint8_t        g_nFrameCtrl = 0;   // 5 bit-Counter
 
-//static uint8_t        g_nPwmValue = 0;    // 4 bit-Register
-//static uint8_t        g_nNextBright = 0;  // 4 bit-Register
-//static uint8_t        g_nRand = 0;        // 5 bit Signal
-//static uint8_t        g_nRandFlag = 0;    // 1 bit Signal
+static uint32_t       g_nBatCtrlTime;
+static uint32_t       g_nMeasureTime;
 
-static uint32_t       g_nMeasureIntervalCounter;
-
-
-static bool           g_bInitialization;    // wait for first ADC conversion
+static bool           g_bInitializated;    // wait for first ADC conversion
 static uint8_t        g_FrameCounter;
 
 
 void _FrameControl(void);
 void _Sleep(void);
-
 uint32_t _GetTrueRandomNumber(void);
 
 void App_Init(void)
@@ -56,40 +49,41 @@ void App_Init(void)
   HW_Init();
   HW_SetTimCallback(App_TimCallback);
 
-  g_nMeasureIntervalCounter = APP_MEASURE_BAT_CTRL_MS - 1;
-  g_bInitialization = true;
+  g_nBatCtrlTime = 0;
+  g_bInitializated = false;
 }
 
 void App_Exec(void)
 {
-  // SLEPP mod, nez dobehne PWM cyklus
-//  _Sleep();
+   // SLEPP mod, wake up from PWM or Systick
+  _Sleep();
 
-  g_nMeasureIntervalCounter++;
-  if (g_nMeasureIntervalCounter == APP_MEASURE_BAT_CTRL_MS)
+  if (Timer_GetTicks_ms() >= g_nBatCtrlTime)
   {
+    g_nBatCtrlTime = Timer_GetTicks_ms() + APP_MEASURE_BAT_CTRL_MS;
+    g_nMeasureTime = Timer_GetTicks_ms() + APP_MEASURE_OFFSET_MS;
     HW_BatVoltageCtrl(true);
   }
-  else if (g_nMeasureIntervalCounter == APP_MEASURE_MS)
+  else if (Timer_GetTicks_ms() >= g_nMeasureTime)
   {
-    g_nMeasureIntervalCounter = 0;
+    g_nMeasureTime = Timer_GetTicks_ms() + APP_MEASURE_BAT_CTRL_MS;
     HW_StartAdc();
   }
 
   if (HW_IsAdcConverted())
   {
-//    if (HW_GetBatVoltage() < APP_BATT_MIN_MV || HW_GetOptoVoltage() > APP_OPTO_MIN_MV)
-//    {
-//      HW_PwmOff();
-//      // standby/stop
-//      while(1);
-//      LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
-//    }
+    if (HW_GetBatVoltage() < APP_BATT_MIN_MV || HW_GetOptoVoltage() > APP_OPTO_MIN_MV)
+    {
+      HW_PwmOff();
+      // standby/stop
+      while(1);
+      LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
+    }
 
     HW_ResetAdcConverted();
-    if (g_bInitialization)
+    if (!g_bInitializated)
     {
-      g_bInitialization = false;
+      g_bInitializated = true;
       HW_PwmOn();
     }
   }
