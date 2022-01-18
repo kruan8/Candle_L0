@@ -24,7 +24,7 @@
 #define APP_MEASURE_OFFSET_MS         100
 
 #define APP_BATT_MIN_MV             3200
-#define APP_OPTO_MIN_MV             1000
+#define APP_OPTO_MIN_MV              300
 
 #include "data.inc"
 
