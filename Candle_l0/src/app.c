@@ -15,16 +15,25 @@
 #include "stm32l0xx_ll_iwdg.h"
 #include "stm32l0xx_ll_pwr.h"
 #include "stm32l0xx_ll_rcc.h"
+#include "stm32l0xx_ll_cortex.h"
+
 
 #define APP_SYSTICK_ISR_OFF     SysTick->CTRL  &= ~SysTick_CTRL_TICKINT_Msk  // vypnout preruseni od Systick
 #define APP_SYSTICK_ISR_ON      SysTick->CTRL  |= SysTick_CTRL_TICKINT_Msk   // zapnout preruseni od Systick
 
-#define APP_CYCLE_DURATION_MS         160
 #define APP_MEASURE_BAT_CTRL_MS     10000
 #define APP_MEASURE_OFFSET_MS         100
 
 #define APP_BATT_MIN_MV             3200
 #define APP_OPTO_MIN_MV              300
+
+#define APP_BUTTON_DEB_INTERVAL_MS    10  // debounce interval for button
+
+#define APP_OFF_INTERVAL_MS         1000*3600  // 1 hour
+
+#define APP_MODE_MODULATION            0
+#define APP_MODE_ON                    1
+#define APP_MODE_SHOUTDOWN             2
 
 #include "data.inc"
 
@@ -35,10 +44,16 @@ static uint32_t       g_nMeasureTime;
 static bool           g_bInitializated;    // wait for first ADC conversion
 static uint8_t        g_FrameCounter;
 
+TimerDebounce_t       g_ButtonDeb;
+uint32_t              g_nButtonState;
+
+uint32_t              g_nOffInterval;
+uint32_t              g_nMode;
 
 void _FrameControl(void);
 void _Sleep(void);
 uint32_t _GetTrueRandomNumber(void);
+void _App_SysTimerCallback(void);
 
 void App_Init(void)
 {
@@ -47,10 +62,18 @@ void App_Init(void)
 #endif
 
   HW_Init();
+
+  Timer_DebounceInit(&g_ButtonDeb, true, APP_BUTTON_DEB_INTERVAL_MS);
+  Timer_SetSysTickCallback(_App_SysTimerCallback);
   HW_SetTimCallback(App_TimCallback);
 
   g_nBatCtrlTime = 0;
   g_bInitializated = false;
+  g_nOffInterval = APP_OFF_INTERVAL_MS;
+  g_nButtonState = true;
+  g_nMode = APP_MODE_MODULATION;
+
+  while (g_nButtonState == true);
 }
 
 void App_Exec(void)
@@ -72,12 +95,9 @@ void App_Exec(void)
 
   if (HW_IsAdcConverted())
   {
-    if (HW_GetBatVoltage() < APP_BATT_MIN_MV || HW_GetOptoVoltage() > APP_OPTO_MIN_MV)
+    if (HW_GetBatVoltage() < APP_BATT_MIN_MV)
     {
-      HW_PwmOff();
-      // standby/stop
-      while(1);
-      LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
+      g_nOffInterval = 0;
     }
 
     HW_ResetAdcConverted();
@@ -88,7 +108,29 @@ void App_Exec(void)
     }
   }
 
-  LL_IWDG_ReloadCounter(IWDG);
+//  LL_IWDG_ReloadCounter(IWDG);
+
+  if (g_nButtonState == true)
+  {
+    g_nMode++;
+    while (g_nButtonState == true);
+    if (g_nMode == APP_MODE_ON)
+    {
+      HW_SetTimCallback(0);
+      HW_PwmSet(0xFFFF);
+    }
+  }
+
+  // shoutdown
+  if (g_nOffInterval == 0 || g_nMode == APP_MODE_SHOUTDOWN)
+  {
+    // standby/stop
+    HW_PwmOff();
+    HW_SetWakeUpPin();
+    HW_SetLowPowerMode(true);
+    while(1);
+  }
+
 }
 
 void _FrameControl(void)
@@ -119,22 +161,29 @@ void _Sleep(void)
 //  APP_SYSTICK_ISR_ON;
 }
 
-void StopMode(void)
+void HW_SetLowPowerMode(bool bStandby)
 {
-//  RTC_WriteAccess(true);
-  RTC->ISR = RTC_ISR_INIT; // Enable init phase
+  // Adc_Disable();
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+  LL_PWR_EnableUltraLowPower();
+  if (bStandby)
+  {
+    PWR->CR |= PWR_CR_PDDS;  // rozlisuje mody STANDBY | STOP
+  }
 
-  // vynulovat time registr
-  RTC->TR = 0;
-  RTC->CR |= (RTC_CR_ALRAE | RTC_CR_ALRAIE);
-  RTC->ISR =~ RTC_ISR_INIT;
-//  RTC_WriteAccess(false);
+  SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+  LL_PWR_ClearFlag_WU();  // Clear Wakeup flag
+  LL_PWR_SetRegulModeLP(LL_PWR_REGU_LPMODES_LOW_POWER);  //PWR->CR |= PWR_CR_LPSDSR;
+  LL_LPM_EnableDeepSleep();
 
-  APP_SYSTICK_ISR_OFF;
+  __asm volatile ("wfi");
 
-  LL_PWR_SetPowerMode(LL_PWR_MODE_STANDBY);
+  SCB->SCR &= (uint32_t)~((uint32_t)SCB_SCR_SLEEPDEEP_Msk);
+  LL_PWR_SetRegulModeLP(LL_PWR_REGU_LPMODES_MAIN);
+  SysTick->VAL = 0;
+  SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
 
-  APP_SYSTICK_ISR_ON;
+//  Adc_Enable();
 }
 
 void App_TimCallback(void)
@@ -145,5 +194,14 @@ void App_TimCallback(void)
   {
     _FrameControl();
   }
+}
 
+void _App_SysTimerCallback(void)
+{
+  g_nButtonState = Timer_Debounce(&g_ButtonDeb, HW_IsButtonOn());
+
+  if (g_nOffInterval > 0)
+  {
+    g_nOffInterval--;
+  }
 }

@@ -12,6 +12,8 @@
 #include "stm32l0xx.h"
 #include <stdbool.h>
 
+#include "stm32l0xx_ll_gpio.h"
+
 #ifdef __cplusplus
  extern "C" {
 #endif
@@ -34,19 +36,65 @@ typedef enum
   P_UNUSED = 0xFF
 }gpio_pins_e;
 
+typedef enum
+{
+  mode_input = LL_GPIO_MODE_INPUT,
+  mode_output = LL_GPIO_MODE_OUTPUT,
+  mode_alternate = LL_GPIO_MODE_ALTERNATE,
+  mode_analog = LL_GPIO_MODE_ANALOG
+} pin_mode_e;
+
+typedef enum
+{
+  outtype_pushpull = LL_GPIO_OUTPUT_PUSHPULL,
+  outtype_od = LL_GPIO_OUTPUT_OPENDRAIN
+} pin_output_type_e;
+
+typedef enum
+{
+  pushpull_no = LL_GPIO_PULL_NO,
+  pushpull_up = LL_GPIO_PULL_UP,
+  pushpull_down = LL_GPIO_PULL_DOWN
+} pin_pushpull_e;
+
+typedef enum
+{
+  speed_low = LL_GPIO_SPEED_LOW,
+  speed_medium = LL_GPIO_SPEED_MEDIUM,
+  speed_high = LL_GPIO_SPEED_FAST,
+  speed_veryhigh = LL_GPIO_SPEED_HIGH
+} pin_speed_e;
+
+typedef enum
+{
+  exti_rising = 0x01,
+  exti_falling = 0x02,
+  exti_rising_falling = 0x03
+} exti_trigger_e;
+
 // makra pro rychlou atomickou operaci zapisu
 #define GET_PORT(PIN)            ((GPIO_TypeDef*)(GPIOA_BASE + ((PIN >> 4) * ((GPIOB_BASE) - (GPIOA_BASE)))))
 #define GET_PIN(PIN)             (1 << (PIN & 0x0F))
 #define GPIO_CLK_ENABLE(PORT)    (RCC->IOPENR |= (1 << ((uint32_t)PORT - (GPIOA_BASE)) / ((GPIOB_BASE) - (GPIOA_BASE))))
 
-void GPIO_ClockEnable(GPIO_TypeDef* gpio);
-void GPIO_ClockDisable(GPIO_TypeDef* gpio);
+#define GPIO_SETPIN(PIN)         (GET_PORT(PIN)->BSRR = GET_PIN(PIN))
+#define GPIO_RESETPIN(PIN)       (GET_PORT(PIN)->BRR = GET_PIN(PIN))
+
+#define  ID1 (*(unsigned long *)0x1FF80050)
+#define  ID2 (*(unsigned long *)0x1FF80054)
+#define  ID3 (*(unsigned long *)0x1FF80058)
+
+void GPIO_ClockEnable(gpio_pins_e ePortPin);
+void GPIO_ClockDisable(gpio_pins_e ePortPin);
 GPIO_TypeDef* GPIO_GetPort(gpio_pins_e ePortPin);
 uint16_t GPIO_GetPin(gpio_pins_e ePortPin);
 void GPIO_SetAFpin(gpio_pins_e ePortPin, uint8_t nAF);
 
 uint16_t GPIO_GetPinSource(uint16_t GPIO_Pin);
 
+void GPIO_ConfigPin(gpio_pins_e ePin, pin_mode_e eMode, pin_output_type_e eOutType, pin_pushpull_e ePull, pin_speed_e eSpeed);
+
+void EXTI_Config(gpio_pins_e ePin, exti_trigger_e eTrigger);
 
 #ifdef __cplusplus
  }

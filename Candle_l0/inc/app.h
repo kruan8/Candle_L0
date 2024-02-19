@@ -14,7 +14,9 @@
 void App_Init(void);
 void App_Exec(void);
 
+void HW_SetLowPowerMode(bool bStandby);
 void App_PwmSet(uint16_t nValue);
 void App_TimCallback(void);
+
 
 #endif /* APP_H_ */

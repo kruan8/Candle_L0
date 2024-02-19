@@ -20,6 +20,7 @@ void HW_PwmOff(void);
 uint32_t HW_GetTrueRandomNumber(void);
 void HW_LedOnOff(bool bEnable);
 void HW_PwmOn(void);
+bool HW_IsButtonOn(void);
 void HW_SetTimCallback(PtrTimIntCb pTimCb);
 
 void HW_BatVoltageCtrl(bool bEnable);
@@ -29,5 +30,6 @@ uint32_t HW_GetOptoVoltage(void);
 void HW_StartAdc(void);
 bool HW_IsAdcConverted(void);
 void HW_ResetAdcConverted(void);
+void HW_SetWakeUpPin(void);
 
 #endif /* HW_H_ */

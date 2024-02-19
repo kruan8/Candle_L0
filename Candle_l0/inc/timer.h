@@ -10,6 +10,14 @@
 
 #include "stm32l0xx.h"
 
+typedef struct
+{
+  uint32_t nLastTime_ms;
+  uint32_t nPreviousDebounced;
+  uint32_t nPreviousNotDebounced;
+  uint32_t nDebounceInterval_ms;
+} TimerDebounce_t;
+
 typedef void(*PtrSysTickCallback) (void);
 
 typedef uint64_t timer_tick_t;
@@ -26,4 +34,8 @@ uint16_t TimerUs_get_microseconds(void);
 void TimerUs_delay(uint16_t microseconds);
 void TimerUs_clear(void);
 void TimerUs_stop(void);
+
+void Timer_DebounceInit(TimerDebounce_t* deb, uint32_t nInitState, uint32_t nDebounceInterval_ms);
+uint32_t Timer_Debounce(TimerDebounce_t* deb, uint32_t nNewState);
+
 #endif /* TIMER_H_ */

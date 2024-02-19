@@ -18,10 +18,10 @@
 #include "stm32l0xx_ll_pwr.h"
 #include "stm32l0xx_ll_iwdg.h"
 
-#define LED                 PA1
+#define HW_LED                 PA1
 
-#define LED_ON              (GET_PORT(LED)->BRR = GET_PIN(LED))
-#define LED_OFF             (GET_PORT(LED)->BSRR = GET_PIN(LED))
+#define LED_ON              (GET_PORT(HW_LED)->BRR = GET_PIN(HW_LED))
+#define LED_OFF             (GET_PORT(HW_LED)->BSRR = GET_PIN(HW_LED))
 
 #define HW_ADC_VOLTAGE_MV                   3000
 #define HW_ADC_RESISTOR_DIVIDER_OPTO    1000/1000
@@ -29,12 +29,13 @@
 
 #define HW_ADC_SAMPLES      10
 #define HW_BATT_CH          LL_ADC_CHANNEL_4
-#define BATT_CTRL           PA7
+#define HW_BATT_CTRL           PA7
 
-#define BATT_CTRL_EN        (GET_PORT(BATT_CTRL)->BRR = GET_PIN(BATT_CTRL))
-#define BATT_CTRL_DIS       (GET_PORT(BATT_CTRL)->BSRR = GET_PIN(BATT_CTRL))
+#define BATT_CTRL_EN        (GET_PORT(HW_BATT_CTRL)->BRR = GET_PIN(HW_BATT_CTRL))
+#define BATT_CTRL_DIS       (GET_PORT(HW_BATT_CTRL)->BSRR = GET_PIN(HW_BATT_CTRL))
 
 #define HW_OPTO_CH          LL_ADC_CHANNEL_0
+#define HW_BUTTON           PA0
 
 #define TIM_PWM             TIM2  // (PA1 = TIM2/CH2)
 #define PWM_STEPS           16       // pocet kroku PWM
@@ -73,20 +74,21 @@ void HW_Init(void)
 
   Timer_Init();
   _Gpio_Init();
-  _AD_Init();
   _PwmInit();
 
-  LL_IWDG_EnableWriteAccess(IWDG);
-  LL_IWDG_SetPrescaler(IWDG, LL_IWDG_PRESCALER_256);
-  LL_IWDG_Enable(IWDG);
-  LL_IWDG_SetReloadCounter(IWDG, 0xFFF);  // cca 32s
+  _AD_Init();
 
-  while(!LL_IWDG_IsReady(IWDG))
-  {
-  /* add time out here for a robust application */
-  }
-
-  LL_IWDG_ReloadCounter(IWDG);
+//  LL_IWDG_EnableWriteAccess(IWDG);
+//  LL_IWDG_SetPrescaler(IWDG, LL_IWDG_PRESCALER_256);
+//  LL_IWDG_Enable(IWDG);
+//  LL_IWDG_SetReloadCounter(IWDG, 0xFFF);  // cca 32s
+//
+//  while(!LL_IWDG_IsReady(IWDG))
+//  {
+//  /* add time out here for a robust application */
+//  }
+//
+//  LL_IWDG_ReloadCounter(IWDG);
 
 }
 
@@ -155,18 +157,17 @@ void HW_StartAdc(void)
 
 void _Gpio_Init(void)
 {
-  LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOA);
+//  LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOA);
 
   // led
-  LL_GPIO_SetPinMode(GET_PORT(LED), GET_PIN(LED), LL_GPIO_MODE_ALTERNATE);
-  LL_GPIO_SetPinOutputType(GET_PORT(LED), GET_PIN(LED), LL_GPIO_OUTPUT_PUSHPULL);
-  LL_GPIO_SetPinPull(GET_PORT(LED), GET_PIN(LED), LL_GPIO_PULL_NO);
-  GPIO_SetAFpin(LED, LL_GPIO_AF_2);
+  GPIO_ConfigPin(HW_LED, mode_alternate, outtype_pushpull, pushpull_no, speed_medium);
+  GPIO_SetAFpin(HW_LED, LL_GPIO_AF_2);
 
   // batt ctrl
-  LL_GPIO_SetPinMode(GET_PORT(BATT_CTRL), GET_PIN(BATT_CTRL), LL_GPIO_MODE_OUTPUT);
-  LL_GPIO_SetPinOutputType(GET_PORT(BATT_CTRL), GET_PIN(BATT_CTRL), LL_GPIO_OUTPUT_PUSHPULL);
-  LL_GPIO_SetPinPull(GET_PORT(BATT_CTRL), GET_PIN(BATT_CTRL), LL_GPIO_PULL_NO);
+  GPIO_ConfigPin(HW_BATT_CTRL, mode_output, outtype_pushpull, pushpull_no, speed_medium);
+
+  // button
+  GPIO_ConfigPin(HW_BUTTON, mode_input, outtype_pushpull, pushpull_down, speed_medium);
 }
 
 //uint32_t HW_GetTrueRandomNumber(void)
@@ -260,6 +261,11 @@ void HW_BatVoltageCtrl(bool bEnable)
   bEnable ? BATT_CTRL_EN : BATT_CTRL_DIS;
 }
 
+bool HW_IsButtonOn(void)
+{
+  return (GET_PORT(HW_BUTTON)->IDR & GET_PIN(HW_BUTTON)) ? true : false;
+}
+
 void HW_SetTimCallback(PtrTimIntCb pTimCb)
 {
   g_pTimCb = pTimCb;
@@ -294,6 +300,12 @@ bool HW_IsAdcConverted(void)
 void HW_ResetAdcConverted(void)
 {
   g_bAdcConverted = false;
+}
+
+void HW_SetWakeUpPin(void)
+{
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+  LL_PWR_EnableWakeUpPin(LL_PWR_WAKEUP_PIN1);
 }
 
 void ADC1_COMP_IRQHandler(void)
